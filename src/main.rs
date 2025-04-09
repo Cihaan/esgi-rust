@@ -3,74 +3,133 @@ use std::io::{self, Write};
 use std::path::Path;
 
 #[derive(Debug)]
-struct BankAccount {
-    balance: f64,
+struct Livre {
+    titre: String,
+    auteur: String,
+    isbn: String,
+    annee_publication: u32,
 }
 
-impl BankAccount {
+impl Livre {
+    fn to_string(&self) -> String {
+        format!(
+            "{};{};{};{}",
+            self.titre, self.auteur, self.isbn, self.annee_publication
+        )
+    }
+
+    fn from_string(line: &str) -> Result<Self, String> {
+        let parts: Vec<&str> = line.split(';').collect();
+        if parts.len() != 4 {
+            return Err("Format de ligne invalide".to_string());
+        }
+
+        let annee = parts[3]
+            .parse::<u32>()
+            .map_err(|_| "Année de publication invalide".to_string())?;
+
+        Ok(Livre {
+            titre: parts[0].to_string(),
+            auteur: parts[1].to_string(),
+            isbn: parts[2].to_string(),
+            annee_publication: annee,
+        })
+    }
+}
+
+#[derive(Debug)]
+struct Bibliotheque {
+    livres: Vec<Livre>,
+}
+
+impl Bibliotheque {
     fn new() -> Self {
-        BankAccount { balance: 0.0 }
+        Bibliotheque { livres: Vec::new() }
     }
 
     fn load_from_file(path: &Path) -> Result<Self, String> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Error lors de la lecture du fichier de solde: {}", e))?;
-        let balance: f64 = content
-            .trim()
-            .parse()
-            .map_err(|_| "Balance invalide dans le fichier de solde".to_string())?;
-        Ok(BankAccount { balance })
+        let content = fs::read_to_string(path).map_err(|e| {
+            format!(
+                "Erreur lors de la lecture du fichier de bibliothèque: {}",
+                e
+            )
+        })?;
+
+        let mut bibliotheque = Bibliotheque::new();
+
+        for line in content.lines() {
+            if !line.trim().is_empty() {
+                let livre = Livre::from_string(line)?;
+                bibliotheque.livres.push(livre);
+            }
+        }
+
+        Ok(bibliotheque)
     }
 
     fn save_to_file(&self, path: &Path) -> Result<(), String> {
-        fs::write(path, self.balance.to_string())
-            .map_err(|e| format!("Erreur lors de la sauvegarde du solde: {}", e))
+        let content: String = self
+            .livres
+            .iter()
+            .map(|livre| livre.to_string())
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        fs::write(path, content)
+            .map_err(|e| format!("Erreur lors de la sauvegarde de la bibliothèque: {}", e))
     }
 
-    fn deposit(&mut self, amount: f64) -> Result<(), String> {
-        if amount <= 0.0 {
-            return Err("Le montant de dépôt doit être positif".to_string());
+    fn ajouter_livre(&mut self, livre: Livre) -> Result<(), String> {
+        if self.livres.iter().any(|l| l.isbn == livre.isbn) {
+            return Err(format!(
+                "Un livre avec l'ISBN {} existe déjà dans la bibliothèque",
+                livre.isbn
+            ));
         }
-        self.balance += amount;
+        self.livres.push(livre);
         Ok(())
     }
 
-    fn withdraw(&mut self, amount: f64) -> Result<(), String> {
-        if amount <= 0.0 {
-            return Err("Le montant de retrait doit être positif".to_string());
-        }
-        if amount > self.balance {
-            return Err("Solde insuffisant".to_string());
-        }
-        self.balance -= amount;
-        Ok(())
+    fn rechercher_par_titre(&self, titre: &str) -> Vec<&Livre> {
+        self.livres
+            .iter()
+            .filter(|livre| livre.titre.to_lowercase().contains(&titre.to_lowercase()))
+            .collect()
     }
 
-    fn get_balance(&self) -> f64 {
-        self.balance
+    fn retirer_livre(&mut self, isbn: &str) -> Result<Livre, String> {
+        let position = self.livres.iter().position(|livre| livre.isbn == isbn);
+
+        match position {
+            Some(pos) => Ok(self.livres.remove(pos)),
+            None => Err(format!("Aucun livre avec l'ISBN {} n'a été trouvé", isbn)),
+        }
+    }
+
+    fn afficher_tous_les_livres(&self) -> &Vec<Livre> {
+        &self.livres
     }
 }
 
 fn main() {
-    let account_file = "account.txt";
-    let path = Path::new(account_file);
+    let bibliotheque_file = "bibliotheque.txt";
+    let path = Path::new(bibliotheque_file);
 
-    let mut account = match BankAccount::load_from_file(path) {
-        Ok(acc) => acc,
-        Err(_) => {
-            println!(
-                "Aucun compte existant trouvé, création d'un nouveau compte avec un solde de 0"
-            );
-            BankAccount::new()
+    let mut bibliotheque = match Bibliotheque::load_from_file(path) {
+        Ok(bib) => bib,
+        Err(e) => {
+            println!("Création d'une nouvelle bibliothèque: {}", e);
+            Bibliotheque::new()
         }
     };
 
     loop {
-        println!("\nMenu du compte bancaire :");
-        println!("1. Voir le solde");
-        println!("2. Déposer de l'argent");
-        println!("3. Retirer de l'argent");
-        println!("4. Quitter");
+        println!("\nGestion de Bibliothèque :");
+        println!("1. Afficher tous les livres");
+        println!("2. Ajouter un livre");
+        println!("3. Rechercher un livre par titre");
+        println!("4. Retirer un livre");
+        println!("5. Quitter");
         print!("Choisissez une option : ");
         io::stdout().flush().unwrap();
 
@@ -79,45 +138,106 @@ fn main() {
 
         match choice.trim() {
             "1" => {
-                println!("Solde actuel : {:.2}", account.get_balance());
+                let livres = bibliotheque.afficher_tous_les_livres();
+                if livres.is_empty() {
+                    println!("La bibliothèque est vide.");
+                } else {
+                    println!("Livres dans la bibliothèque :");
+                    for (i, livre) in livres.iter().enumerate() {
+                        println!(
+                            "{}. {} par {}, ISBN: {}, Année: {}",
+                            i + 1,
+                            livre.titre,
+                            livre.auteur,
+                            livre.isbn,
+                            livre.annee_publication
+                        );
+                    }
+                }
             }
             "2" => {
-                print!("Entrez le montant à déposer : ");
-                io::stdout().flush().unwrap();
-                let mut amount = String::new();
-                io::stdin().read_line(&mut amount).unwrap();
+                println!("Ajout d'un nouveau livre :");
 
-                match amount.trim().parse::<f64>() {
-                    Ok(amt) => match account.deposit(amt) {
-                        Ok(_) => println!("Dépôt réussi"),
-                        Err(e) => println!("Erreur : {}", e),
-                    },
-                    Err(_) => println!("Montant saisi invalid"),
+                print!("Titre : ");
+                io::stdout().flush().unwrap();
+                let mut titre = String::new();
+                io::stdin().read_line(&mut titre).unwrap();
+
+                print!("Auteur : ");
+                io::stdout().flush().unwrap();
+                let mut auteur = String::new();
+                io::stdin().read_line(&mut auteur).unwrap();
+
+                print!("ISBN : ");
+                io::stdout().flush().unwrap();
+                let mut isbn = String::new();
+                io::stdin().read_line(&mut isbn).unwrap();
+
+                print!("Année de publication : ");
+                io::stdout().flush().unwrap();
+                let mut annee = String::new();
+                io::stdin().read_line(&mut annee).unwrap();
+
+                match annee.trim().parse::<u32>() {
+                    Ok(annee_pub) => {
+                        let livre = Livre {
+                            titre: titre.trim().to_string(),
+                            auteur: auteur.trim().to_string(),
+                            isbn: isbn.trim().to_string(),
+                            annee_publication: annee_pub,
+                        };
+
+                        match bibliotheque.ajouter_livre(livre) {
+                            Ok(_) => println!("Livre ajouté avec succès."),
+                            Err(e) => println!("Erreur : {}", e),
+                        }
+                    }
+                    Err(_) => println!("Année de publication invalide."),
                 }
             }
             "3" => {
-                print!("Entrez le montant à retirer : ");
+                print!("Entrez le titre à rechercher : ");
                 io::stdout().flush().unwrap();
-                let mut amount = String::new();
-                io::stdin().read_line(&mut amount).unwrap();
+                let mut titre = String::new();
+                io::stdin().read_line(&mut titre).unwrap();
 
-                match amount.trim().parse::<f64>() {
-                    Ok(amt) => match account.withdraw(amt) {
-                        Ok(_) => println!("Retrait réussi"),
-                        Err(e) => println!("Erreur : {}", e),
-                    },
-                    Err(_) => println!("Montant saisi invalid"),
+                let resultats = bibliotheque.rechercher_par_titre(titre.trim());
+                if resultats.is_empty() {
+                    println!("Aucun livre trouvé avec ce titre.");
+                } else {
+                    println!("Livres trouvés :");
+                    for (i, livre) in resultats.iter().enumerate() {
+                        println!(
+                            "{}. {} par {}, ISBN: {}, Année: {}",
+                            i + 1,
+                            livre.titre,
+                            livre.auteur,
+                            livre.isbn,
+                            livre.annee_publication
+                        );
+                    }
                 }
             }
             "4" => {
-                match account.save_to_file(path) {
-                    Ok(_) => println!("Compte sauvegardé avec succès"),
-                    Err(e) => println!("Erreur lors de la sauvegarde du compte : {}", e),
+                print!("Entrez l'ISBN du livre à retirer : ");
+                io::stdout().flush().unwrap();
+                let mut isbn = String::new();
+                io::stdin().read_line(&mut isbn).unwrap();
+
+                match bibliotheque.retirer_livre(isbn.trim()) {
+                    Ok(livre) => println!("Le livre '{}' a été retiré.", livre.titre),
+                    Err(e) => println!("Erreur : {}", e),
                 }
-                println!("Fermeture...");
+            }
+            "5" => {
+                match bibliotheque.save_to_file(path) {
+                    Ok(_) => println!("Bibliothèque sauvegardée avec succès."),
+                    Err(e) => println!("Erreur lors de la sauvegarde de la bibliothèque : {}", e),
+                }
+                println!("Au revoir !");
                 break;
             }
-            _ => println!("Option invalide"),
+            _ => println!("Option invalide. Veuillez réessayer."),
         }
     }
 }
