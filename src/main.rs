@@ -1,243 +1,231 @@
+use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fs;
-use std::io::{self, Write};
-use std::path::Path;
 
-#[derive(Debug)]
-struct Livre {
-    titre: String,
-    auteur: String,
-    isbn: String,
-    annee_publication: u32,
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+enum PokemonType {
+    Fire,
+    Water,
+    Grass,
+    Electric,
 }
 
-impl Livre {
-    fn to_string(&self) -> String {
-        format!(
-            "{};{};{};{}",
-            self.titre, self.auteur, self.isbn, self.annee_publication
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+enum Gender {
+    Male,
+    Female,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct Pokemon {
+    name: String,
+    level: u32,
+    pokemon_type: PokemonType,
+    xp: u32,
+    gender: Gender,
+}
+
+impl Pokemon {
+    fn new(name: &str, level: u32, pokemon_type: PokemonType, gender: Gender) -> Self {
+        Pokemon {
+            name: name.to_string(),
+            level,
+            pokemon_type,
+            xp: 0,
+            gender,
+        }
+    }
+
+    fn gain_xp(&mut self, amount: u32) {
+        self.xp += amount;
+        while self.xp >= 100 {
+            self.xp -= 100;
+            self.level_up();
+        }
+    }
+
+    fn level_up(&mut self) {
+        self.level += 1;
+    }
+
+    fn can_breed(&self, other: &Pokemon) -> bool {
+        self.pokemon_type == other.pokemon_type
+            && self.gender != other.gender
+            && self.level >= 5
+            && other.level >= 5
+    }
+
+    fn breed(pokemon1: &Pokemon, pokemon2: &Pokemon) -> Option<Pokemon> {
+        if pokemon1.can_breed(pokemon2) {
+            Some(Pokemon::new(
+                "Mystere",
+                1,
+                pokemon1.pokemon_type.clone(),
+                if rand::random() {
+                    Gender::Male
+                } else {
+                    Gender::Female
+                },
+            ))
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for Pokemon {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} (Niveau {} - {} - XP: {} - {})",
+            self.name,
+            self.level,
+            match self.pokemon_type {
+                PokemonType::Fire => "Feu",
+                PokemonType::Water => "Eau",
+                PokemonType::Grass => "Plante",
+                PokemonType::Electric => "Electrik",
+            },
+            self.xp,
+            match self.gender {
+                Gender::Male => "Male",
+                Gender::Female => "Femelle",
+            }
         )
     }
-
-    fn from_string(line: &str) -> Result<Self, String> {
-        let parts: Vec<&str> = line.split(';').collect();
-        if parts.len() != 4 {
-            return Err("Format de ligne invalide".to_string());
-        }
-
-        let annee = parts[3]
-            .parse::<u32>()
-            .map_err(|_| "Année de publication invalide".to_string())?;
-
-        Ok(Livre {
-            titre: parts[0].to_string(),
-            auteur: parts[1].to_string(),
-            isbn: parts[2].to_string(),
-            annee_publication: annee,
-        })
-    }
 }
 
-#[derive(Debug)]
-struct Bibliotheque {
-    livres: Vec<Livre>,
+#[derive(Serialize, Deserialize)]
+struct Breeding {
+    pokemon_list: Vec<Pokemon>,
 }
 
-impl Bibliotheque {
-    fn new() -> Self {
-        Bibliotheque { livres: Vec::new() }
+impl Breeding {
+    fn save_to_file(&self, filename: &str) -> std::io::Result<()> {
+        let json = serde_json::to_string_pretty(self)?;
+        fs::write(filename, json)
     }
 
-    fn load_from_file(path: &Path) -> Result<Self, String> {
-        let content = fs::read_to_string(path).map_err(|e| {
-            format!(
-                "Erreur lors de la lecture du fichier de bibliothèque: {}",
-                e
-            )
-        })?;
-
-        let mut bibliotheque = Bibliotheque::new();
-
-        for line in content.lines() {
-            if !line.trim().is_empty() {
-                let livre = Livre::from_string(line)?;
-                bibliotheque.livres.push(livre);
-            }
-        }
-
-        Ok(bibliotheque)
+    fn load_from_file(filename: &str) -> std::io::Result<Self> {
+        let content = fs::read_to_string(filename)?;
+        let breeding: Breeding = serde_json::from_str(&content)?;
+        Ok(breeding)
     }
 
-    fn save_to_file(&self, path: &Path) -> Result<(), String> {
-        let content: String = self
-            .livres
+    fn filter_by_level(&self, min_level: u32) -> Vec<&Pokemon> {
+        self.pokemon_list
             .iter()
-            .map(|livre| livre.to_string())
-            .collect::<Vec<String>>()
-            .join("\n");
-
-        fs::write(path, content)
-            .map_err(|e| format!("Erreur lors de la sauvegarde de la bibliothèque: {}", e))
-    }
-
-    fn ajouter_livre(&mut self, livre: Livre) -> Result<(), String> {
-        if self.livres.iter().any(|l| l.isbn == livre.isbn) {
-            return Err(format!(
-                "Un livre avec l'ISBN {} existe déjà dans la bibliothèque",
-                livre.isbn
-            ));
-        }
-        self.livres.push(livre);
-        Ok(())
-    }
-
-    fn rechercher_par_titre(&self, titre: &str) -> Vec<&Livre> {
-        self.livres
-            .iter()
-            .filter(|livre| livre.titre.to_lowercase().contains(&titre.to_lowercase()))
+            .filter(|p| p.level >= min_level)
             .collect()
     }
 
-    fn retirer_livre(&mut self, isbn: &str) -> Result<Livre, String> {
-        let position = self.livres.iter().position(|livre| livre.isbn == isbn);
+    fn filter_by_type(&self, pokemon_type: &PokemonType) -> Vec<&Pokemon> {
+        self.pokemon_list
+            .iter()
+            .filter(|p| p.pokemon_type == *pokemon_type)
+            .collect()
+    }
 
-        match position {
-            Some(pos) => Ok(self.livres.remove(pos)),
-            None => Err(format!("Aucun livre avec l'ISBN {} n'a été trouvé", isbn)),
+    fn new() -> Self {
+        Breeding {
+            pokemon_list: Vec::new(),
         }
     }
 
-    fn afficher_tous_les_livres(&self) -> &Vec<Livre> {
-        &self.livres
+    fn add_pokemon(&mut self, pokemon: Pokemon) {
+        self.pokemon_list.push(pokemon);
+    }
+
+    fn display_all(&self) {
+        for pokemon in &self.pokemon_list {
+            println!("{}", pokemon);
+        }
+    }
+
+    fn train_all(&mut self, xp_amount: u32) {
+        for pokemon in &mut self.pokemon_list {
+            pokemon.gain_xp(xp_amount);
+        }
+    }
+
+    fn attempt_breeding(&mut self, index1: usize, index2: usize) -> Option<Pokemon> {
+        if index1 < self.pokemon_list.len() && index2 < self.pokemon_list.len() {
+            let pokemon1 = &self.pokemon_list[index1];
+            let pokemon2 = &self.pokemon_list[index2];
+            Pokemon::breed(pokemon1, pokemon2)
+        } else {
+            None
+        }
     }
 }
 
 fn main() {
-    let bibliotheque_file = "bibliotheque.txt";
-    let path = Path::new(bibliotheque_file);
+    let mut breeding = Breeding::new();
 
-    let mut bibliotheque = match Bibliotheque::load_from_file(path) {
-        Ok(bib) => bib,
-        Err(e) => {
-            println!("Création d'une nouvelle bibliothèque: {}", e);
-            Bibliotheque::new()
+    breeding.add_pokemon(Pokemon::new(
+        "Salamèche",
+        5,
+        PokemonType::Fire,
+        Gender::Male,
+    ));
+    breeding.add_pokemon(Pokemon::new(
+        "Carapuce",
+        6,
+        PokemonType::Water,
+        Gender::Female,
+    ));
+    breeding.add_pokemon(Pokemon::new(
+        "Bulbizarre",
+        7,
+        PokemonType::Grass,
+        Gender::Male,
+    ));
+    breeding.add_pokemon(Pokemon::new(
+        "Pikachu",
+        5,
+        PokemonType::Electric,
+        Gender::Female,
+    ));
+
+    println!("Pokémons dans l'élevage:");
+    breeding.display_all();
+
+    println!("\nEntraînement de tous les Pokémons (+50 XP):");
+    breeding.train_all(50);
+    breeding.display_all();
+
+    println!("\nTentative de reproduction entre Salamèche et Pikachu:");
+    if let Some(baby) = breeding.attempt_breeding(0, 3) {
+        println!("Nouveau Pokémon né: {}", baby);
+        breeding.add_pokemon(baby);
+    } else {
+        println!("Ces Pokémons ne peuvent pas se reproduire!");
+    }
+
+    println!("\nÉtat final de l'élevage:");
+    breeding.display_all();
+
+    if let Err(e) = breeding.save_to_file("pokemon_save.json") {
+        println!("Erreur lors de la sauvegarde: {}", e);
+    } else {
+        println!("\nProgression sauvegardée!");
+    }
+
+    match Breeding::load_from_file("pokemon_save.json") {
+        Ok(loaded_breeding) => {
+            println!("\nChargement de la sauvegarde:");
+            loaded_breeding.display_all();
+
+            println!("\nPokémons de niveau 6 ou plus:");
+            for pokemon in loaded_breeding.filter_by_level(6) {
+                println!("{}", pokemon);
+            }
+
+            println!("\nPokémons de type Feu:");
+            for pokemon in loaded_breeding.filter_by_type(&PokemonType::Fire) {
+                println!("{}", pokemon);
+            }
         }
-    };
-
-    loop {
-        println!("\nGestion de Bibliothèque :");
-        println!("1. Afficher tous les livres");
-        println!("2. Ajouter un livre");
-        println!("3. Rechercher un livre par titre");
-        println!("4. Retirer un livre");
-        println!("5. Quitter");
-        print!("Choisissez une option : ");
-        io::stdout().flush().unwrap();
-
-        let mut choice = String::new();
-        io::stdin().read_line(&mut choice).unwrap();
-
-        match choice.trim() {
-            "1" => {
-                let livres = bibliotheque.afficher_tous_les_livres();
-                if livres.is_empty() {
-                    println!("La bibliothèque est vide.");
-                } else {
-                    println!("Livres dans la bibliothèque :");
-                    for (i, livre) in livres.iter().enumerate() {
-                        println!(
-                            "{}. {} par {}, ISBN: {}, Année: {}",
-                            i + 1,
-                            livre.titre,
-                            livre.auteur,
-                            livre.isbn,
-                            livre.annee_publication
-                        );
-                    }
-                }
-            }
-            "2" => {
-                println!("Ajout d'un nouveau livre :");
-
-                print!("Titre : ");
-                io::stdout().flush().unwrap();
-                let mut titre = String::new();
-                io::stdin().read_line(&mut titre).unwrap();
-
-                print!("Auteur : ");
-                io::stdout().flush().unwrap();
-                let mut auteur = String::new();
-                io::stdin().read_line(&mut auteur).unwrap();
-
-                print!("ISBN : ");
-                io::stdout().flush().unwrap();
-                let mut isbn = String::new();
-                io::stdin().read_line(&mut isbn).unwrap();
-
-                print!("Année de publication : ");
-                io::stdout().flush().unwrap();
-                let mut annee = String::new();
-                io::stdin().read_line(&mut annee).unwrap();
-
-                match annee.trim().parse::<u32>() {
-                    Ok(annee_pub) => {
-                        let livre = Livre {
-                            titre: titre.trim().to_string(),
-                            auteur: auteur.trim().to_string(),
-                            isbn: isbn.trim().to_string(),
-                            annee_publication: annee_pub,
-                        };
-
-                        match bibliotheque.ajouter_livre(livre) {
-                            Ok(_) => println!("Livre ajouté avec succès."),
-                            Err(e) => println!("Erreur : {}", e),
-                        }
-                    }
-                    Err(_) => println!("Année de publication invalide."),
-                }
-            }
-            "3" => {
-                print!("Entrez le titre à rechercher : ");
-                io::stdout().flush().unwrap();
-                let mut titre = String::new();
-                io::stdin().read_line(&mut titre).unwrap();
-
-                let resultats = bibliotheque.rechercher_par_titre(titre.trim());
-                if resultats.is_empty() {
-                    println!("Aucun livre trouvé avec ce titre.");
-                } else {
-                    println!("Livres trouvés :");
-                    for (i, livre) in resultats.iter().enumerate() {
-                        println!(
-                            "{}. {} par {}, ISBN: {}, Année: {}",
-                            i + 1,
-                            livre.titre,
-                            livre.auteur,
-                            livre.isbn,
-                            livre.annee_publication
-                        );
-                    }
-                }
-            }
-            "4" => {
-                print!("Entrez l'ISBN du livre à retirer : ");
-                io::stdout().flush().unwrap();
-                let mut isbn = String::new();
-                io::stdin().read_line(&mut isbn).unwrap();
-
-                match bibliotheque.retirer_livre(isbn.trim()) {
-                    Ok(livre) => println!("Le livre '{}' a été retiré.", livre.titre),
-                    Err(e) => println!("Erreur : {}", e),
-                }
-            }
-            "5" => {
-                match bibliotheque.save_to_file(path) {
-                    Ok(_) => println!("Bibliothèque sauvegardée avec succès."),
-                    Err(e) => println!("Erreur lors de la sauvegarde de la bibliothèque : {}", e),
-                }
-                println!("Au revoir !");
-                break;
-            }
-            _ => println!("Option invalide. Veuillez réessayer."),
-        }
+        Err(e) => println!("Erreur lors du chargement: {}", e),
     }
 }

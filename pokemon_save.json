@@ -1,0 +1,32 @@
+{
+  "pokemon_list": [
+    {
+      "name": "Salamèche",
+      "level": 5,
+      "pokemon_type": "Fire",
+      "xp": 50,
+      "gender": "Male"
+    },
+    {
+      "name": "Carapuce",
+      "level": 6,
+      "pokemon_type": "Water",
+      "xp": 50,
+      "gender": "Female"
+    },
+    {
+      "name": "Bulbizarre",
+      "level": 7,
+      "pokemon_type": "Grass",
+      "xp": 50,
+      "gender": "Male"
+    },
+    {
+      "name": "Pikachu",
+      "level": 5,
+      "pokemon_type": "Electric",
+      "xp": 50,
+      "gender": "Female"
+    }
+  ]
+}
