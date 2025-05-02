@@ -1,231 +1,145 @@
-use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::fs;
+use std::io;
+use std::io::Write;
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-enum PokemonType {
-    Fire,
-    Water,
-    Grass,
-    Electric,
+#[derive(Debug)]
+struct Produit {
+    nom: String,
+    quantite: u32,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-enum Gender {
-    Male,
-    Female,
+fn ajouter_produit(inventaire: &mut Vec<Produit>) {
+    print!("Nom du produit: ");
+    io::stdout().flush().unwrap();
+    let mut nom = String::new();
+    io::stdin().read_line(&mut nom).unwrap();
+    let nom = nom.trim().to_string();
+
+    print!("Quantité du produit: ");
+    io::stdout().flush().unwrap();
+    let mut quantite_str = String::new();
+    io::stdin().read_line(&mut quantite_str).unwrap();
+    let quantite: u32 = quantite_str.trim().parse().unwrap();
+
+    let produit = Produit { nom, quantite };
+    inventaire.push(produit);
+    println!("Produit ajouté.");
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct Pokemon {
-    name: String,
-    level: u32,
-    pokemon_type: PokemonType,
-    xp: u32,
-    gender: Gender,
-}
-
-impl Pokemon {
-    fn new(name: &str, level: u32, pokemon_type: PokemonType, gender: Gender) -> Self {
-        Pokemon {
-            name: name.to_string(),
-            level,
-            pokemon_type,
-            xp: 0,
-            gender,
-        }
-    }
-
-    fn gain_xp(&mut self, amount: u32) {
-        self.xp += amount;
-        while self.xp >= 100 {
-            self.xp -= 100;
-            self.level_up();
-        }
-    }
-
-    fn level_up(&mut self) {
-        self.level += 1;
-    }
-
-    fn can_breed(&self, other: &Pokemon) -> bool {
-        self.pokemon_type == other.pokemon_type
-            && self.gender != other.gender
-            && self.level >= 5
-            && other.level >= 5
-    }
-
-    fn breed(pokemon1: &Pokemon, pokemon2: &Pokemon) -> Option<Pokemon> {
-        if pokemon1.can_breed(pokemon2) {
-            Some(Pokemon::new(
-                "Mystere",
-                1,
-                pokemon1.pokemon_type.clone(),
-                if rand::random() {
-                    Gender::Male
-                } else {
-                    Gender::Female
-                },
-            ))
-        } else {
-            None
+fn lister_produits(inventaire: &Vec<Produit>) {
+    if inventaire.is_empty() {
+        println!("L'inventaire est vide.");
+    } else {
+        println!("Inventaire:");
+        for produit in inventaire {
+            println!("{:?}", produit);
         }
     }
 }
 
-impl fmt::Display for Pokemon {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{} (Niveau {} - {} - XP: {} - {})",
-            self.name,
-            self.level,
-            match self.pokemon_type {
-                PokemonType::Fire => "Feu",
-                PokemonType::Water => "Eau",
-                PokemonType::Grass => "Plante",
-                PokemonType::Electric => "Electrik",
-            },
-            self.xp,
-            match self.gender {
-                Gender::Male => "Male",
-                Gender::Female => "Femelle",
+fn supprimer_produit(inventaire: &mut Vec<Produit>) {
+    print!("Nom du produit à supprimer: ");
+    io::stdout().flush().unwrap();
+    let mut nom = String::new();
+    io::stdin().read_line(&mut nom).unwrap();
+    let nom = nom.trim().to_string();
+
+    let mut index = None;
+    for (i, produit) in inventaire.iter().enumerate() {
+        if produit.nom == nom {
+            index = Some(i);
+            break;
+        }
+    }
+
+    match index {
+        Some(i) => {
+            inventaire.remove(i);
+            println!("Produit supprimé.");
+        }
+        None => println!("Produit non trouvé."),
+    }
+}
+
+fn modifier_produit(inventaire: &mut Vec<Produit>) {
+    print!("Nom du produit à modifier: ");
+    io::stdout().flush().unwrap();
+    let mut nom = String::new();
+    io::stdin().read_line(&mut nom).unwrap();
+    let nom = nom.trim().to_string();
+
+    for produit in inventaire {
+        if produit.nom == nom {
+            print!("Nouvelle quantité: ");
+            io::stdout().flush().unwrap();
+            let mut quantite_str = String::new();
+            io::stdin().read_line(&mut quantite_str).unwrap();
+            let quantite: u32 = quantite_str.trim().parse().unwrap();
+
+            produit.quantite = quantite;
+            println!("Quantité modifiée.");
+            return;
+        }
+    }
+
+    println!("Produit non trouvé.");
+}
+
+fn sauvegarder_inventaire(inventaire: &Vec<Produit>, filename: &str) {
+    let mut contents = String::new();
+    for produit in inventaire {
+        contents.push_str(&format!("{},{}\n", produit.nom, produit.quantite));
+    }
+    fs::write(filename, contents).unwrap();
+    println!("Inventaire sauvegardé dans {}.", filename);
+}
+
+fn charger_inventaire(filename: &str) -> Vec<Produit> {
+    let mut inventaire = Vec::new();
+
+    if let Ok(contents) = fs::read_to_string(filename) {
+        for line in contents.lines() {
+            let parts: Vec<&str> = line.split(',').collect();
+            if parts.len() == 2 {
+                let nom = parts[0].to_string();
+                let quantite: u32 = parts[1].parse().unwrap();
+                let produit = Produit { nom, quantite };
+                inventaire.push(produit);
             }
-        )
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct Breeding {
-    pokemon_list: Vec<Pokemon>,
-}
-
-impl Breeding {
-    fn save_to_file(&self, filename: &str) -> std::io::Result<()> {
-        let json = serde_json::to_string_pretty(self)?;
-        fs::write(filename, json)
-    }
-
-    fn load_from_file(filename: &str) -> std::io::Result<Self> {
-        let content = fs::read_to_string(filename)?;
-        let breeding: Breeding = serde_json::from_str(&content)?;
-        Ok(breeding)
-    }
-
-    fn filter_by_level(&self, min_level: u32) -> Vec<&Pokemon> {
-        self.pokemon_list
-            .iter()
-            .filter(|p| p.level >= min_level)
-            .collect()
-    }
-
-    fn filter_by_type(&self, pokemon_type: &PokemonType) -> Vec<&Pokemon> {
-        self.pokemon_list
-            .iter()
-            .filter(|p| p.pokemon_type == *pokemon_type)
-            .collect()
-    }
-
-    fn new() -> Self {
-        Breeding {
-            pokemon_list: Vec::new(),
         }
     }
 
-    fn add_pokemon(&mut self, pokemon: Pokemon) {
-        self.pokemon_list.push(pokemon);
-    }
-
-    fn display_all(&self) {
-        for pokemon in &self.pokemon_list {
-            println!("{}", pokemon);
-        }
-    }
-
-    fn train_all(&mut self, xp_amount: u32) {
-        for pokemon in &mut self.pokemon_list {
-            pokemon.gain_xp(xp_amount);
-        }
-    }
-
-    fn attempt_breeding(&mut self, index1: usize, index2: usize) -> Option<Pokemon> {
-        if index1 < self.pokemon_list.len() && index2 < self.pokemon_list.len() {
-            let pokemon1 = &self.pokemon_list[index1];
-            let pokemon2 = &self.pokemon_list[index2];
-            Pokemon::breed(pokemon1, pokemon2)
-        } else {
-            None
-        }
-    }
+    inventaire
 }
 
 fn main() {
-    let mut breeding = Breeding::new();
+    let filename = "inventaire.txt";
+    let mut inventaire = charger_inventaire(filename);
 
-    breeding.add_pokemon(Pokemon::new(
-        "Salamèche",
-        5,
-        PokemonType::Fire,
-        Gender::Male,
-    ));
-    breeding.add_pokemon(Pokemon::new(
-        "Carapuce",
-        6,
-        PokemonType::Water,
-        Gender::Female,
-    ));
-    breeding.add_pokemon(Pokemon::new(
-        "Bulbizarre",
-        7,
-        PokemonType::Grass,
-        Gender::Male,
-    ));
-    breeding.add_pokemon(Pokemon::new(
-        "Pikachu",
-        5,
-        PokemonType::Electric,
-        Gender::Female,
-    ));
+    loop {
+        println!("\nMenu:");
+        println!("1. Ajouter un produit");
+        println!("2. Lister les produits");
+        println!("3. Modifier un produit");
+        println!("4. Supprimer un produit");
+        println!("5. Sauvegarder et quitter");
 
-    println!("Pokémons dans l'élevage:");
-    breeding.display_all();
+        print!("Choix: ");
+        io::stdout().flush().unwrap();
+        let mut choice = String::new();
+        io::stdin().read_line(&mut choice).unwrap();
+        let choice: u32 = choice.trim().parse().unwrap();
 
-    println!("\nEntraînement de tous les Pokémons (+50 XP):");
-    breeding.train_all(50);
-    breeding.display_all();
-
-    println!("\nTentative de reproduction entre Salamèche et Pikachu:");
-    if let Some(baby) = breeding.attempt_breeding(0, 3) {
-        println!("Nouveau Pokémon né: {}", baby);
-        breeding.add_pokemon(baby);
-    } else {
-        println!("Ces Pokémons ne peuvent pas se reproduire!");
-    }
-
-    println!("\nÉtat final de l'élevage:");
-    breeding.display_all();
-
-    if let Err(e) = breeding.save_to_file("pokemon_save.json") {
-        println!("Erreur lors de la sauvegarde: {}", e);
-    } else {
-        println!("\nProgression sauvegardée!");
-    }
-
-    match Breeding::load_from_file("pokemon_save.json") {
-        Ok(loaded_breeding) => {
-            println!("\nChargement de la sauvegarde:");
-            loaded_breeding.display_all();
-
-            println!("\nPokémons de niveau 6 ou plus:");
-            for pokemon in loaded_breeding.filter_by_level(6) {
-                println!("{}", pokemon);
+        match choice {
+            1 => ajouter_produit(&mut inventaire),
+            2 => lister_produits(&inventaire),
+            3 => modifier_produit(&mut inventaire),
+            4 => supprimer_produit(&mut inventaire),
+            5 => {
+                sauvegarder_inventaire(&inventaire, filename);
+                break;
             }
-
-            println!("\nPokémons de type Feu:");
-            for pokemon in loaded_breeding.filter_by_type(&PokemonType::Fire) {
-                println!("{}", pokemon);
-            }
+            _ => println!("Choix invalide."),
         }
-        Err(e) => println!("Erreur lors du chargement: {}", e),
     }
 }
