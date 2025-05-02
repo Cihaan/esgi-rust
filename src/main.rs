@@ -1,57 +1,38 @@
 use rand::Rng;
+use std::cmp::Ordering;
 use std::io;
 
 fn main() {
-    println!("Password Generator");
+    println!("Guess the number!");
 
-    // 1. Get password length from user
-    println!("Enter the desired password length:");
-    let mut length = String::new();
-    io::stdin()
-        .read_line(&mut length)
-        .expect("Failed to read line");
-    let length: usize = length.trim().parse().expect("Please enter a valid number");
+    let secret_number = rand::thread_rng().gen_range(1..=100);
 
-    // 2. Define character sets
-    let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    let numbers = "0123456789";
-    let special_chars = "!@#$%^&*()_+=-`~[]\\{}|;':\",./<>?";
+    loop {
+        println!("Please input your guess.");
 
-    // 3. Allow user to specify characters to exclude (Bonus)
-    println!("Enter characters to exclude (optional, e.g., l10):");
-    let mut exclude = String::new();
-    io::stdin()
-        .read_line(&mut exclude)
-        .expect("Failed to read line");
-    let exclude: String = exclude.trim().to_string();
+        let mut guess = String::new();
 
-    // 4. Generate the password
-    let password = generate_password(length, letters, numbers, special_chars, &exclude);
+        io::stdin()
+            .read_line(&mut guess)
+            .expect("Failed to read line");
 
-    // 5. Display the generated password
-    println!("Generated Password: {}", password);
-}
+        let guess: u32 = match guess.trim().parse() {
+            Ok(num) => num,
+            Err(_) => {
+                println!("Please type a number!");
+                continue;
+            }
+        };
 
-fn generate_password(
-    length: usize,
-    letters: &str,
-    numbers: &str,
-    special_chars: &str,
-    exclude: &str,
-) -> String {
-    let mut rng = rand::thread_rng();
-    let combined_chars: String = letters.to_string() + numbers + special_chars;
-    let mut password = String::new();
+        println!("You guessed: {}", guess);
 
-    let allowed_chars: String = combined_chars
-        .chars()
-        .filter(|c| !exclude.contains(*c))
-        .collect();
-
-    for _i in 0..length {
-        let idx = rng.gen_range(0..allowed_chars.len());
-        password.push(allowed_chars.chars().nth(idx).unwrap());
+        match guess.cmp(&secret_number) {
+            Ordering::Less => println!("Too small!"),
+            Ordering::Greater => println!("Too big!"),
+            Ordering::Equal => {
+                println!("You win!");
+                break;
+            }
+        }
     }
-
-    password
 }
