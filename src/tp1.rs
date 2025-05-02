@@ -18,8 +18,16 @@ fn ajouter_produit(inventaire: &mut Vec<Produit>) {
     print!("Quantité du produit: ");
     io::stdout().flush().unwrap();
     let mut quantite_str = String::new();
-    io::stdin().read_line(&mut quantite_str).unwrap();
-    let quantite: u32 = quantite_str.trim().parse().unwrap();
+    io::stdin()
+        .read_line(&mut quantite_str)
+        .expect("Échec de la lecture de la ligne");
+    let quantite: u32 = match quantite_str.trim().parse() {
+        Ok(num) => num,
+        Err(_) => {
+            println!("Quantité invalide. Veuillez entrer un nombre.");
+            return;
+        }
+    };
 
     let produit = Produit { nom, quantite };
     inventaire.push(produit);
@@ -73,8 +81,16 @@ fn modifier_produit(inventaire: &mut Vec<Produit>) {
             print!("Nouvelle quantité: ");
             io::stdout().flush().unwrap();
             let mut quantite_str = String::new();
-            io::stdin().read_line(&mut quantite_str).unwrap();
-            let quantite: u32 = quantite_str.trim().parse().unwrap();
+            io::stdin()
+                .read_line(&mut quantite_str)
+                .expect("Échec de la lecture de la ligne");
+            let quantite: u32 = match quantite_str.trim().parse() {
+                Ok(num) => num,
+                Err(_) => {
+                    println!("Quantité invalide. Veuillez entrer un nombre.");
+                    return;
+                }
+            };
 
             produit.quantite = quantite;
             println!("Quantité modifiée.");
@@ -90,8 +106,10 @@ fn sauvegarder_inventaire(inventaire: &Vec<Produit>, filename: &str) {
     for produit in inventaire {
         contents.push_str(&format!("{},{}\n", produit.nom, produit.quantite));
     }
-    fs::write(filename, contents).unwrap();
-    println!("Inventaire sauvegardé dans {}.", filename);
+    match fs::write(filename, contents) {
+        Ok(_) => println!("Inventaire sauvegardé dans {}.", filename),
+        Err(e) => println!("Erreur lors de la sauvegarde de l'inventaire: {}", e),
+    }
 }
 
 fn charger_inventaire(filename: &str) -> Vec<Produit> {
@@ -102,11 +120,21 @@ fn charger_inventaire(filename: &str) -> Vec<Produit> {
             let parts: Vec<&str> = line.split(',').collect();
             if parts.len() == 2 {
                 let nom = parts[0].to_string();
-                let quantite: u32 = parts[1].parse().unwrap();
-                let produit = Produit { nom, quantite };
-                inventaire.push(produit);
+                match parts[1].parse::<u32>() {
+                    Ok(quantite) => {
+                        let produit = Produit { nom, quantite };
+                        inventaire.push(produit);
+                    }
+                    Err(_) => {
+                        println!("Erreur de format dans le fichier pour la ligne: {}", line);
+                    }
+                }
+            } else {
+                println!("Erreur de format dans le fichier pour la ligne: {}", line);
             }
         }
+    } else {
+        println!("Fichier d'inventaire non trouvé ou erreur de lecture, démarrage avec un inventaire vide.");
     }
 
     inventaire
@@ -125,21 +153,22 @@ fn main() {
         println!("5. Sauvegarder et quitter");
 
         print!("Choix: ");
-        io::stdout().flush().unwrap();
+        io::stdout().flush().expect("Échec du flush stdout");
         let mut choice = String::new();
-        io::stdin().read_line(&mut choice).unwrap();
-        let choice: u32 = choice.trim().parse().unwrap();
+        io::stdin()
+            .read_line(&mut choice)
+            .expect("Échec de la lecture de la ligne");
 
-        match choice {
-            1 => ajouter_produit(&mut inventaire),
-            2 => lister_produits(&inventaire),
-            3 => modifier_produit(&mut inventaire),
-            4 => supprimer_produit(&mut inventaire),
-            5 => {
+        match choice.trim().parse::<u32>() {
+            Ok(1) => ajouter_produit(&mut inventaire),
+            Ok(2) => lister_produits(&inventaire),
+            Ok(3) => modifier_produit(&mut inventaire),
+            Ok(4) => supprimer_produit(&mut inventaire),
+            Ok(5) => {
                 sauvegarder_inventaire(&inventaire, filename);
                 break;
             }
-            _ => println!("Choix invalide."),
+            _ => println!("Choix invalide. Veuillez entrer un nombre entre 1 et 5."),
         }
     }
 }

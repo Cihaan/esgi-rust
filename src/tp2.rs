@@ -4,20 +4,25 @@ use std::io;
 fn main() {
     println!("Password Generator");
 
-    // 1. Get password length from user
     println!("Enter the desired password length:");
     let mut length = String::new();
-    io::stdin()
-        .read_line(&mut length)
-        .expect("Failed to read line");
-    let length: usize = length.trim().parse().expect("Please enter a valid number");
+    let length: usize = loop {
+        io::stdin()
+            .read_line(&mut length)
+            .expect("Failed to read line");
+        match length.trim().parse() {
+            Ok(num) if num > 0 => break num,
+            _ => {
+                println!("Invalid input. Please enter a positive number for the length:");
+                length.clear();
+            }
+        }
+    };
 
-    // 2. Define character sets
     let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let numbers = "0123456789";
     let special_chars = "!@#$%^&*()_+=-`~[]\\{}|;':\",./<>?";
 
-    // 3. Allow user to specify characters to exclude (Bonus)
     println!("Enter characters to exclude (optional, e.g., l10):");
     let mut exclude = String::new();
     io::stdin()
@@ -25,10 +30,8 @@ fn main() {
         .expect("Failed to read line");
     let exclude: String = exclude.trim().to_string();
 
-    // 4. Generate the password
     let password = generate_password(length, letters, numbers, special_chars, &exclude);
 
-    // 5. Display the generated password
     println!("Generated Password: {}", password);
 }
 
@@ -48,8 +51,14 @@ fn generate_password(
         .filter(|c| !exclude.contains(*c))
         .collect();
 
+    if allowed_chars.is_empty() {
+        println!("Error: No characters available to generate password after exclusions.");
+        return String::new();
+    }
+
     for _i in 0..length {
         let idx = rng.gen_range(0..allowed_chars.len());
+
         password.push(allowed_chars.chars().nth(idx).unwrap());
     }
 

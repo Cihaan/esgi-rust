@@ -17,9 +17,15 @@ fn main() {
             .expect("Failed to read line");
 
         let guess: u32 = match guess.trim().parse() {
-            Ok(num) => num,
+            Ok(num) => {
+                if num < 1 || num > 100 {
+                    println!("The secret number is between 1 and 100.");
+                    continue;
+                }
+                num
+            }
             Err(_) => {
-                println!("Please type a number!");
+                println!("Please type a valid number!");
                 continue;
             }
         };
