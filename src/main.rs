@@ -1,145 +1,57 @@
-use std::fs;
+use rand::Rng;
 use std::io;
-use std::io::Write;
-
-#[derive(Debug)]
-struct Produit {
-    nom: String,
-    quantite: u32,
-}
-
-fn ajouter_produit(inventaire: &mut Vec<Produit>) {
-    print!("Nom du produit: ");
-    io::stdout().flush().unwrap();
-    let mut nom = String::new();
-    io::stdin().read_line(&mut nom).unwrap();
-    let nom = nom.trim().to_string();
-
-    print!("Quantité du produit: ");
-    io::stdout().flush().unwrap();
-    let mut quantite_str = String::new();
-    io::stdin().read_line(&mut quantite_str).unwrap();
-    let quantite: u32 = quantite_str.trim().parse().unwrap();
-
-    let produit = Produit { nom, quantite };
-    inventaire.push(produit);
-    println!("Produit ajouté.");
-}
-
-fn lister_produits(inventaire: &Vec<Produit>) {
-    if inventaire.is_empty() {
-        println!("L'inventaire est vide.");
-    } else {
-        println!("Inventaire:");
-        for produit in inventaire {
-            println!("{:?}", produit);
-        }
-    }
-}
-
-fn supprimer_produit(inventaire: &mut Vec<Produit>) {
-    print!("Nom du produit à supprimer: ");
-    io::stdout().flush().unwrap();
-    let mut nom = String::new();
-    io::stdin().read_line(&mut nom).unwrap();
-    let nom = nom.trim().to_string();
-
-    let mut index = None;
-    for (i, produit) in inventaire.iter().enumerate() {
-        if produit.nom == nom {
-            index = Some(i);
-            break;
-        }
-    }
-
-    match index {
-        Some(i) => {
-            inventaire.remove(i);
-            println!("Produit supprimé.");
-        }
-        None => println!("Produit non trouvé."),
-    }
-}
-
-fn modifier_produit(inventaire: &mut Vec<Produit>) {
-    print!("Nom du produit à modifier: ");
-    io::stdout().flush().unwrap();
-    let mut nom = String::new();
-    io::stdin().read_line(&mut nom).unwrap();
-    let nom = nom.trim().to_string();
-
-    for produit in inventaire {
-        if produit.nom == nom {
-            print!("Nouvelle quantité: ");
-            io::stdout().flush().unwrap();
-            let mut quantite_str = String::new();
-            io::stdin().read_line(&mut quantite_str).unwrap();
-            let quantite: u32 = quantite_str.trim().parse().unwrap();
-
-            produit.quantite = quantite;
-            println!("Quantité modifiée.");
-            return;
-        }
-    }
-
-    println!("Produit non trouvé.");
-}
-
-fn sauvegarder_inventaire(inventaire: &Vec<Produit>, filename: &str) {
-    let mut contents = String::new();
-    for produit in inventaire {
-        contents.push_str(&format!("{},{}\n", produit.nom, produit.quantite));
-    }
-    fs::write(filename, contents).unwrap();
-    println!("Inventaire sauvegardé dans {}.", filename);
-}
-
-fn charger_inventaire(filename: &str) -> Vec<Produit> {
-    let mut inventaire = Vec::new();
-
-    if let Ok(contents) = fs::read_to_string(filename) {
-        for line in contents.lines() {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() == 2 {
-                let nom = parts[0].to_string();
-                let quantite: u32 = parts[1].parse().unwrap();
-                let produit = Produit { nom, quantite };
-                inventaire.push(produit);
-            }
-        }
-    }
-
-    inventaire
-}
 
 fn main() {
-    let filename = "inventaire.txt";
-    let mut inventaire = charger_inventaire(filename);
+    println!("Password Generator");
 
-    loop {
-        println!("\nMenu:");
-        println!("1. Ajouter un produit");
-        println!("2. Lister les produits");
-        println!("3. Modifier un produit");
-        println!("4. Supprimer un produit");
-        println!("5. Sauvegarder et quitter");
+    // 1. Get password length from user
+    println!("Enter the desired password length:");
+    let mut length = String::new();
+    io::stdin()
+        .read_line(&mut length)
+        .expect("Failed to read line");
+    let length: usize = length.trim().parse().expect("Please enter a valid number");
 
-        print!("Choix: ");
-        io::stdout().flush().unwrap();
-        let mut choice = String::new();
-        io::stdin().read_line(&mut choice).unwrap();
-        let choice: u32 = choice.trim().parse().unwrap();
+    // 2. Define character sets
+    let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let numbers = "0123456789";
+    let special_chars = "!@#$%^&*()_+=-`~[]\\{}|;':\",./<>?";
 
-        match choice {
-            1 => ajouter_produit(&mut inventaire),
-            2 => lister_produits(&inventaire),
-            3 => modifier_produit(&mut inventaire),
-            4 => supprimer_produit(&mut inventaire),
-            5 => {
-                sauvegarder_inventaire(&inventaire, filename);
-                break;
-            }
-            _ => println!("Choix invalide."),
-        }
+    // 3. Allow user to specify characters to exclude (Bonus)
+    println!("Enter characters to exclude (optional, e.g., l10):");
+    let mut exclude = String::new();
+    io::stdin()
+        .read_line(&mut exclude)
+        .expect("Failed to read line");
+    let exclude: String = exclude.trim().to_string();
+
+    // 4. Generate the password
+    let password = generate_password(length, letters, numbers, special_chars, &exclude);
+
+    // 5. Display the generated password
+    println!("Generated Password: {}", password);
+}
+
+fn generate_password(
+    length: usize,
+    letters: &str,
+    numbers: &str,
+    special_chars: &str,
+    exclude: &str,
+) -> String {
+    let mut rng = rand::thread_rng();
+    let combined_chars: String = letters.to_string() + numbers + special_chars;
+    let mut password = String::new();
+
+    let allowed_chars: String = combined_chars
+        .chars()
+        .filter(|c| !exclude.contains(*c))
+        .collect();
+
+    for _i in 0..length {
+        let idx = rng.gen_range(0..allowed_chars.len());
+        password.push(allowed_chars.chars().nth(idx).unwrap());
     }
+
+    password
 }
